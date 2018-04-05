@@ -1,15 +1,15 @@
 <template>
   <div id="app">
-    <template v-for="activity in activities">
+    <template v-for="condition in conditions">
       <input type="radio"
-        :id="activity"
-        :value="activity"
-        name="activity"
-        v-model="activity_status">
-      <label :for="activity">{{ activity }}</label>
+        :id="condition"
+        :value="condition"
+        name="condition"
+        v-model="filter_condition">
+      <label :for="condition">{{ translate_condition(condition) }}</label>
     </template>
     <div class="speech_list"
-      v-for="speech in current_speeches">
+      v-for="speech in filter_speech()">
       <div class="speech_block">
         <div class="class_img">
           <img :src="speech.class_img" class="class_img" alt="">
@@ -29,82 +29,87 @@
             </div>
           </div>
         </div>
-        <div v-if='date_now == speech.speech_date '
-          class='speech_status comming_status'>
-          <span>即將開始</span>
-        </div>
-        <div v-else-if='date_now < speech.speech_date'
-          class='speech_status this_week_status'>
-          <span>本週活動</span>
-        </div>
-        <div v-else='speech.speech_date < date_now'
-          class='speech_status past_status'>
-          <span>已經結束</span>
+        <div class="speech_status" :class="speech.status">
+          {{speech_status_info[speech.status]}}
         </div>
       </div>
     </div>
   </div>
 </template>
 
+<script src="moment.js"></script>
 <script>
 import axios from 'axios';
+import * as moment from 'moment'
 export default {
   name: 'app',
   data () {
     return {
-      activities: ['all_speeches', 'comming_speeches', 'past_speeches' ],
-      activity_status: 'all_speeches',
-      current_speeches: null,
-      all_speeches: null,
-      comming_speeches: null,
-      past_speeches: null,
-      date_now: "2018-03-22"
+      conditions: ['all', 'today', 'past' ],
+      speech_status_info:{
+        comming: '本週活動',
+        today: '即將開始',
+        past: '已經結束'
+      },
+      filter_condition: 'all',
+      all_speechs: null,
+      date_now: moment().format('YYYY-MM-DD'),
+      date_now: '2018-03-22' //Demo 用
     }
   },
   mounted: function () {
-    this.get_data()
+    this.get_speech()
   },
   methods:{
-    get_data: function () {
+    get_speech: function () {
       var vm = this
       axios.get('https://devche.com/api/speech/data')
       .then(function (response) {
-        // console.log(response);
-        response.data.result.sort(function(a, b) {
-          var nameA = a.speech_date;
-          var nameB = b.speech_date;
-          if (nameA < nameB) {
-            return 1;
-          }
-          if (nameA > nameB) {
-            return -1;
-          }
-          return 0;
-        });
-        vm.current_speeches = response.data.result
-        vm.all_speeches = response.data.result
-        vm.comming_speeches = vm.all_speeches.filter(speech => speech.speech_date > vm.date_now)
-        vm.past_speeches = vm.all_speeches.filter(speech => speech.speech_date < vm.date_now)
-
+        response.data.result
+          .sort(function(a, b) {
+            var nameA = a.speech_date;
+            var nameB = b.speech_date;
+            if (nameA < nameB) {
+              return 1;
+            }
+            if (nameA > nameB) {
+              return -1;
+            }
+            return 0;
+          })
+          .map(item => {
+            item.status = (function(){
+              if(vm.date_now < item.speech_date) return 'comming'
+              if(vm.date_now == item.speech_date) return 'today'
+              if(item.speech_date < vm.date_now) return 'past'
+            })()
+          })
+        vm.all_speechs = response.data.result
       })
       .catch(function (error) {
         console.log(error)
       });
     },
-    show_speeche: function(){
-      switch (this.activity_status) {
-        case "all_speeches": this.current_speeches = this.all_speeches
+    filter_speech: function(){
+      console.log('filter_speech');
+      if(this.filter_condition == 'all'){
+        return this.all_speechs
+      }
+      return this.all_speechs.filter(speech =>
+        speech.status === this.filter_condition
+      )
+    },
+    translate_condition: function (condition){
+      switch (condition) {
+        case 'all': return '全部活動'
           break;
-        case "comming_speeches": this.current_speeches = this.comming_speeches
+        case 'today': return '即將開始活動'
           break;
-        case "past_speeches": this.current_speeches = this.past_speeches
+        case 'past': return '已經結束活動'
           break;
         default:
       }
     }
-  },
-  watch: {
-    activity_status: 'show_speeche'
   },
 }
 </script>
@@ -195,13 +200,13 @@ h3, p, span{
     -webkit-writing-mode: vertical-rl;
     color: #fff;
   }
-  .comming_status{
+  .today{
     background-color: #5d9c6c;
   }
-  .this_week_status{
+  .comming{
     background-color: #1e8ba6;;
   }
-  .past_status{
+  .past{
     background-color: #7a062e;
   }
 
